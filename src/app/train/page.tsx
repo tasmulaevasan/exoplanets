@@ -343,8 +343,8 @@ const TrainPage = () => {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   This will train your personal custom model. After training
-                  completes, you can use it for predictions by selecting "User
-                  Custom Model" on the Predict page.
+                  completes, you can use it for predictions by selecting
+                  &quot;User Custom Model&quot; on the Predict page.
                 </p>
               </div>
             </CardContent>
@@ -635,11 +635,13 @@ const TrainPage = () => {
                         color: "var(--color-foreground)",
                         fontWeight: "bold",
                       }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: number | string, name: string) => {
+                        const numValue =
+                          typeof value === "number" ? value : parseFloat(value);
                         if (name === "Loss") {
-                          return [Number(value).toFixed(4), name];
+                          return [numValue.toFixed(4), name];
                         }
-                        return [Number(value).toFixed(2) + "%", name];
+                        return [numValue.toFixed(2) + "%", name];
                       }}
                       labelFormatter={(value, payload) => {
                         if (payload && payload[0]) {
