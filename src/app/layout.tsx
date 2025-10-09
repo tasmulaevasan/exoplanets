@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster as Sonner } from "sonner";
+import { Analytics } from "@vercel/analytics/react";
 import "@/app/globals.css";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <Providers>{children}</Providers>
+        <Analytics/>
       </body>
     </html>
   );
