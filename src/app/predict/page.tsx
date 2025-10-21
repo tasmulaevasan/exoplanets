@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import ModelSelector from "@/components/ModelSelector";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -98,26 +99,33 @@ const PredictPage = () => {
     const file = e.target.files?.[0];
     if (file) {
       setUploadedFile(file);
-      alert(`File uploaded: ${file.name} ready for prediction`);
+      toast.success(`File uploaded: ${file.name}`, {
+        description: "Ready for prediction"
+      });
     }
   };
 
   const handlePredict = async () => {
     if (!uploadedFile && !manualParams.period) {
-      alert(
-        "No data provided. Please upload a CSV or enter manual parameters."
-      );
+      toast.error("No data provided", {
+        description: "Please upload a CSV or enter manual parameters."
+      });
       return;
     }
 
     setIsPredicting(true);
+    toast.loading("Running prediction...", { id: "prediction" });
 
     try {
       if (uploadedFile) {
         const result = await api.predictCSV(uploadedFile, selectedModel);
         setPredictions(result.predictions);
-        alert(
-          `Predictions complete! Analyzed ${result.predictions.length} candidates using ${selectedModel} model`
+        toast.success(
+          `Predictions complete! Analyzed ${result.predictions.length} candidates`,
+          {
+            id: "prediction",
+            description: `Using ${selectedModel} model`
+          }
         );
       } else {
         const result = await api.predictManual(
@@ -131,16 +139,26 @@ const PredictPage = () => {
           selectedModel
         );
         setPredictions(result.predictions);
-        alert(
-          `Prediction complete! Classification: ${result.predictions[0].prediction} using ${selectedModel} model`
+
+        const prediction = result.predictions[0].prediction;
+        const confidence = (result.predictions[0].confidence * 100).toFixed(1);
+
+        toast.success(
+          `Prediction: ${prediction}`,
+          {
+            id: "prediction",
+            description: `Confidence: ${confidence}% (${selectedModel} model)`
+          }
         );
       }
     } catch (error) {
       console.error("Prediction error:", error);
-      alert(
-        `Prediction failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
+      toast.error(
+        "Prediction failed",
+        {
+          id: "prediction",
+          description: error instanceof Error ? error.message : "Unknown error"
+        }
       );
     } finally {
       setIsPredicting(false);

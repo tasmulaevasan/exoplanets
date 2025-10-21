@@ -24,7 +24,8 @@ MODEL_CONFIGS = {
             "patience": 12,
             "device": "cuda"
         },
-        "available": False
+        "available": False,
+        "training_time_estimate": "2-4 hours (GPU required)"
     },
     "user": {
         "name": "User Custom Model",
@@ -46,7 +47,8 @@ MODEL_CONFIGS = {
             "patience": 8,
             "device": "cpu"
         },
-        "available": True
+        "available": True,
+        "training_time_estimate": "10-20 minutes (CPU)"
     }
 }
 

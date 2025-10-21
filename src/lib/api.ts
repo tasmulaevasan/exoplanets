@@ -278,6 +278,28 @@ class ExoplanetAPI {
 
     return response.json();
   }
+
+  async getLogs(): Promise<{ success: boolean; logs: unknown[]; timestamp: string }> {
+    const response = await fetch(`${this.baseUrl}/logs`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get logs: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async clearLogs(): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/logs/clear`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to clear logs: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const api = new ExoplanetAPI();

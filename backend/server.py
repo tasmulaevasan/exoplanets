@@ -3,16 +3,53 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
+from contextlib import asynccontextmanager
 import json
 import pandas as pd
 import numpy as np
 import io
 import asyncio
+import logging
 from datetime import datetime
 from predict import predict_single, predict_batch
 from train import train_model
 from config import get_available_models, get_model_config
-app = FastAPI(title="Exoplanet Detection API")
+from logger import setup_logging, get_logs, clear_logs, add_custom_log
+
+# Setup logging
+logger = setup_logging()
+
+@asynccontextmanager
+async def lifespan(app):  # noqa: ARG001
+    # Startup
+    logger.info("=" * 60)
+    logger.info("🚀 Exoplanet Detection API Started")
+    logger.info("=" * 60)
+    logger.info("Available endpoints:")
+    logger.info("  - GET  /health       Health check")
+    logger.info("  - POST /predict/manual   Manual prediction")
+    logger.info("  - POST /predict/csv      Batch CSV prediction")
+    logger.info("  - POST /train            Train model")
+    logger.info("  - GET  /train/status     Training status")
+    logger.info("  - GET  /logs             Get server logs")
+    logger.info("  - POST /logs/clear       Clear logs")
+    logger.info("=" * 60)
+
+    # Check if models exist
+    try:
+        models = get_available_models()
+        for model in models:
+            status = "✅" if model['available'] else "❌"
+            logger.info(f"{status} {model['name']}: {'Available' if model['available'] else 'Not found'}")
+    except Exception as e:
+        logger.error(f"Failed to check models: {str(e)}")
+
+    yield
+
+    # Shutdown
+    logger.info("🛑 Shutting down Exoplanet Detection API")
+
+app = FastAPI(title="Exoplanet Detection API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,11 +94,13 @@ async def root():
     }
 @app.get("/health")
 async def health_check():
+    logger.debug("Health check requested")
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 @app.post("/predict/manual")
 async def predict_manual(request: PredictManualRequest, modelType: Optional[str] = None):
     try:
-        print(f"[DEBUG] Received request: {request}, modelType: {modelType}")
+        logger.info(f"📊 Manual prediction request received (model: {modelType or 'default'})")
+        logger.debug(f"Parameters: period={request.period}, depth={request.depth}")
         input_features = {
             "period": request.period,
             "duration": request.duration,
@@ -76,9 +115,8 @@ async def predict_manual(request: PredictManualRequest, modelType: Optional[str]
             "radius": request.stellarRadius,
             "source": "manual"
         }
-        print(f"[DEBUG] Input features: {input_features}")
         result = predict_single(input_features, model_type=modelType)
-        print(f"[DEBUG] Prediction result: {result}")
+        logger.info(f"✅ Prediction: {result['prediction']} (confidence: {result['confidence']:.2%})")
         return {
             "success": True,
             "predictions": [{
@@ -90,41 +128,55 @@ async def predict_manual(request: PredictManualRequest, modelType: Optional[str]
             }]
         }
     except Exception as e:
-        print(f"[ERROR] Prediction failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"❌ Prediction failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 @app.post("/predict/csv")
 async def predict_csv(file: UploadFile = File(...), modelType: Optional[str] = None):
     try:
+        logger.info(f"📁 CSV prediction request: {file.filename} (model: {modelType or 'default'})")
         if not file.filename.endswith('.csv'):
             raise HTTPException(status_code=400, detail="Only CSV files are supported")
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        logger.info(f"Processing {len(df)} rows from CSV")
         predictions = predict_batch(df, model_type=modelType)
+        logger.info(f"✅ CSV prediction complete: {len(predictions)} results")
         return {
             "success": True,
             "total_count": len(predictions),
             "predictions": predictions
         }
     except Exception as e:
+        logger.error(f"❌ CSV prediction failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 @app.post("/predict/download")
 async def download_predictions(file: UploadFile = File(...), modelType: Optional[str] = None):
     try:
+        logger.info(f"📥 Download predictions request: {file.filename} (model: {modelType or 'default'})")
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        logger.info(f"Processing {len(df)} rows for download")
         predictions = predict_batch(df, model_type=modelType)
+
+        # Convert predictions to DataFrame
         result_df = pd.DataFrame(predictions)
+        logger.info(f"Generated {len(result_df)} predictions")
+
+        # Create CSV output
         output = io.StringIO()
         result_df.to_csv(output, index=False)
         output.seek(0)
+
+        logger.info("✅ Predictions CSV ready for download")
         return StreamingResponse(
             io.BytesIO(output.getvalue().encode()),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=predictions.csv"}
         )
     except Exception as e:
+        logger.error(f"❌ Download predictions failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 @app.post("/train")
 async def train_endpoint(
@@ -137,13 +189,16 @@ async def train_endpoint(
 ):
     global training_state
     if training_state["is_training"]:
+        logger.warning("⚠️ Training request rejected: training already in progress")
         raise HTTPException(status_code=409, detail="Training is already in progress")
     try:
+        logger.info(f"🎓 Training started: model={modelType}")
         config = get_model_config(modelType)
         hyperparams = config["hyperparameters"]
         final_lr = learningRate if learningRate is not None else hyperparams["learning_rate"]
         final_epochs = epochs if epochs is not None else hyperparams["epochs"]
         final_batch = batchSize if batchSize is not None else hyperparams["batch_size"]
+        logger.info(f"Training config: lr={final_lr}, epochs={final_epochs}, batch={final_batch}")
         datasets = json.loads(selectedDatasets) if selectedDatasets else []
         custom_data_path = None
         if file:
@@ -249,12 +304,17 @@ async def get_training_status():
 @app.get("/models")
 async def get_models():
     try:
+        logger.debug("Fetching available models")
         models = get_available_models()
+        logger.info(f"✅ Returned {len(models)} model configs")
         return {
             "success": True,
             "models": models
         }
     except Exception as e:
+        logger.error(f"❌ Failed to get models: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 @app.get("/metrics")
 async def get_metrics():
@@ -301,6 +361,40 @@ async def get_model_info():
             "timestamp": None,
             "error": str(e)
         }
+
+@app.get("/logs")
+async def get_server_logs(limit: int = 100, level: Optional[str] = None):
+    """Get recent server logs"""
+    try:
+        logs = get_logs(limit=limit, level=level)
+        return {
+            "success": True,
+            "logs": logs,
+            "total": len(logs),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get logs: {str(e)}")
+        return {
+            "success": False,
+            "logs": [],
+            "error": str(e)
+        }
+
+@app.post("/logs/clear")
+async def clear_server_logs():
+    """Clear log buffer"""
+    try:
+        clear_logs()
+        logger.warning("🗑️ Log buffer cleared by user request")
+        return {"success": True, "message": "Logs cleared"}
+    except Exception as e:
+        logger.error(f"Failed to clear logs: {str(e)}")
+        return {"success": False, "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"🌐 Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

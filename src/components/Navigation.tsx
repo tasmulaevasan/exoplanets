@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Rocket, Brain, Target, Info } from "lucide-react";
+import { Rocket, Brain, Target, Info, Terminal } from "lucide-react";
+import BackendStatus from "./BackendStatus";
 
 const Navigation = () => {
   const pathname = usePathname();
@@ -11,6 +12,7 @@ const Navigation = () => {
     { path: "/", label: "Home", icon: Rocket },
     { path: "/train", label: "Train Model", icon: Brain },
     { path: "/predict", label: "Predict", icon: Target },
+    { path: "/console", label: "Console", icon: Terminal },
     { path: "/about", label: "About", icon: Info },
   ];
 
@@ -27,6 +29,7 @@ const Navigation = () => {
         </a>
 
         <div className="flex items-center gap-2">
+          <BackendStatus />
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;

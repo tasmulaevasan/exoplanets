@@ -122,7 +122,9 @@ const TrainPage = () => {
                 ? (newStatus.metrics.accuracy * 100).toFixed(1)
                 : "N/A";
               setMessage(`Training complete! Accuracy: ${accuracy}%`);
-              toast.success(`Training completed! Accuracy: ${accuracy}%`);
+              toast.success("Training completed successfully!", {
+                description: `Final accuracy: ${accuracy}% • Model ready for predictions`
+              });
 
               if (pollerRef.current) {
                 pollerRef.current.stop();
@@ -201,6 +203,8 @@ const TrainPage = () => {
       totalEpochs: 0,
     });
 
+    toast.loading("Initializing training...", { id: "train-init" });
+
     try {
       const result = await api.train(
         {
@@ -215,7 +219,10 @@ const TrainPage = () => {
 
       console.log("Training started:", result);
       setMessage(result.message);
-      toast.success("Training started successfully!");
+      toast.success("Training started successfully!", {
+        id: "train-init",
+        description: `${hyperparameters.epochs} epochs with LR ${hyperparameters.learningRate}`
+      });
 
       pollerRef.current = new TrainingStatusPoller((status) => {
         console.log("Training status update:", status);
@@ -260,7 +267,9 @@ const TrainPage = () => {
             ? (status.metrics.accuracy * 100).toFixed(1)
             : "N/A";
           setMessage(`Training complete! Accuracy: ${accuracy}%`);
-          toast.success(`Training completed! Accuracy: ${accuracy}%`);
+          toast.success("Training completed successfully!", {
+            description: `Final accuracy: ${accuracy}% • Model ready for predictions`
+          });
           localStorage.removeItem("trainingData");
 
           if (pollerRef.current) {
@@ -275,7 +284,9 @@ const TrainPage = () => {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
       setMessage(`Training failed: ${errorMessage}`);
-      toast.error(`Training failed: ${errorMessage}`);
+      toast.error("Training failed", {
+        description: errorMessage
+      });
       setIsTraining(false);
     }
   };
@@ -373,12 +384,18 @@ const TrainPage = () => {
                     min="0.0001"
                     max="0.01"
                     value={hyperparameters.learningRate}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
                       setHyperparameters({
                         ...hyperparameters,
-                        learningRate: parseFloat(e.target.value),
-                      })
-                    }
+                        learningRate: value,
+                      });
+                      if (value < 0.0001 || value > 0.01) {
+                        toast.warning("Learning rate outside recommended range", {
+                          description: "Recommended range: 0.0001 - 0.01"
+                        });
+                      }
+                    }}
                     disabled={isTraining}
                     className="bg-card/50"
                   />
@@ -397,12 +414,18 @@ const TrainPage = () => {
                     min="5"
                     max="100"
                     value={hyperparameters.epochs}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
                       setHyperparameters({
                         ...hyperparameters,
-                        epochs: parseInt(e.target.value),
-                      })
-                    }
+                        epochs: value,
+                      });
+                      if (value < 5 || value > 100) {
+                        toast.warning("Epochs outside recommended range", {
+                          description: "Recommended range: 5 - 100"
+                        });
+                      }
+                    }}
                     disabled={isTraining}
                     className="bg-card/50"
                   />
@@ -422,12 +445,18 @@ const TrainPage = () => {
                     max="128"
                     step="8"
                     value={hyperparameters.batchSize}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
                       setHyperparameters({
                         ...hyperparameters,
-                        batchSize: parseInt(e.target.value),
-                      })
-                    }
+                        batchSize: value,
+                      });
+                      if (value < 8 || value > 128) {
+                        toast.warning("Batch size outside recommended range", {
+                          description: "Recommended range: 8 - 128"
+                        });
+                      }
+                    }}
                     disabled={isTraining}
                     className="bg-card/50"
                   />
